@@ -10,29 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  terraform:
-    strategy:
-      matrix:
-        environment:
-          - name: development
-            branch: dev
-            project: app-dev-project
-            location: europe-north1
-            replicas: 1
-            external_ip: false
-          - name: production
-            branch: main
-            project: app-prod-project
-            location: europe-central2
-            replicas: 4
-            external_ip: true
-      fail-fast: false
-
+  terraform-dev:
     runs-on: ubuntu-24.04
-    if: |
-      github.event_name == 'push' && github.ref == format('refs/heads/{0}', matrix.environment.branch) ||
-      github.event_name == 'pull_request' && github.base_ref == 'main'
-    
+    if: github.ref == 'refs/heads/dev' || (github.event_name == 'pull_request' && github.head_ref == 'dev')
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -45,15 +25,15 @@ jobs:
       - name: Initialize Terraform
         run: terraform init -input=false
 
-      - name: Plan Terraform deployment (${{ matrix.environment.name }})
+      - name: Plan Terraform deployment (development)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: .github/workflows/mock-credentials.json
         run: |
           terraform plan -input=false -out=local.tfplan \
-            -var="project=${{ matrix.environment.project }}" \
-            -var="location=${{ matrix.environment.location }}" \
-            -var="replicas=${{ matrix.environment.replicas }}" \
-            -var="enableExternalIP=${{ matrix.environment.external_ip }}"
+            -var="project=app-dev-project" \
+            -var="location=europe-north1" \
+            -var="replicas=1" \
+            -var="enableExternalIP=false"
 
       - name: Annotate Terraform output changes
         shell: bash
@@ -63,5 +43,41 @@ jobs:
             output_changes="${output_changes//'%'/'%25'}"
             output_changes="${output_changes//$'\r'/'%0D'}"
             output_changes="${output_changes//$'\n'/'%0A'}"
-            printf '::notice title=Terraform output changes (${{ matrix.environment.name }})::%s\n' "$output_changes"
+            printf '::notice title=Terraform output changes (development)::%s\n' "$output_changes"
+          fi
+
+  terraform-prod:
+    runs-on: ubuntu-24.04
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.8
+
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Plan Terraform deployment (production)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: .github/workflows/mock-credentials.json
+        run: |
+          terraform plan -input=false -out=local.tfplan \
+            -var="project=app-prod-project" \
+            -var="location=europe-central2" \
+            -var="replicas=4" \
+            -var="enableExternalIP=true"
+
+      - name: Annotate Terraform output changes
+        shell: bash
+        run: |
+          output_changes="$(terraform show -no-color local.tfplan | awk '/^Changes to Outputs:/{show=1} show')"
+          if [[ -n "$output_changes" ]]; then
+            output_changes="${output_changes//'%'/'%25'}"
+            output_changes="${output_changes//$'\r'/'%0D'}"
+            output_changes="${output_changes//$'\n'/'%0A'}"
+            printf '::notice title=Terraform output changes (production)::%s\n' "$output_changes"
           fi
