@@ -1,14 +1,38 @@
 name: Terraform deployment
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ dev, main ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read
 
 jobs:
-  deploy:
+  terraform:
+    strategy:
+      matrix:
+        environment:
+          - name: development
+            branch: dev
+            project: app-dev-project
+            location: europe-north1
+            replicas: 1
+            external_ip: false
+          - name: production
+            branch: main
+            project: app-prod-project
+            location: europe-central2
+            replicas: 4
+            external_ip: true
+      fail-fast: false
+
     runs-on: ubuntu-24.04
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/${{ matrix.environment.branch }}') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
+    
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -21,14 +45,16 @@ jobs:
       - name: Initialize Terraform
         run: terraform init -input=false
 
-      - name: Plan Terraform deployment
+      - name: Plan Terraform deployment (${{ matrix.environment.name }})
         env:
-          # Reference mock-credentials to make Terraform's Google-Provider not complain about missing
-          # credentials for the plan. They are not required, since tf-apply never runs.
           GOOGLE_APPLICATION_CREDENTIALS: .github/workflows/mock-credentials.json
-        run: terraform plan -input=false -out=local.tfplan -var-file=configuration/sample.tfvars.json
+        run: |
+          terraform plan -input=false -out=local.tfplan \
+            -var="project=${{ matrix.environment.project }}" \
+            -var="location=${{ matrix.environment.location }}" \
+            -var="replicas=${{ matrix.environment.replicas }}" \
+            -var="enableExternalIP=${{ matrix.environment.external_ip }}"
 
-      # Pretty print the changes to the Terraform Outputs directly into the GitHub Workflow Annotations for convenience
       - name: Annotate Terraform output changes
         shell: bash
         run: |
@@ -37,5 +63,5 @@ jobs:
             output_changes="${output_changes//'%'/'%25'}"
             output_changes="${output_changes//$'\r'/'%0D'}"
             output_changes="${output_changes//$'\n'/'%0A'}"
-            printf '::notice title=Terraform output changes::%s\n' "$output_changes"
+            printf '::notice title=Terraform output changes (${{ matrix.environment.name }})::%s\n' "$output_changes"
           fi
