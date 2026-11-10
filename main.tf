@@ -2,7 +2,7 @@ provider "google" {
   project = var.project
   region  = var.location
 }
-
+# Workflow-Trigger Test
 resource "google_compute_network" "application" {
   name                    = "application-network"
   auto_create_subnetworks = true

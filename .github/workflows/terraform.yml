@@ -30,8 +30,8 @@ jobs:
 
     runs-on: ubuntu-24.04
     if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/${{ matrix.environment.branch }}') ||
-      (github.event_name == 'pull_request' && github.base_ref == 'main')
+      github.event_name == 'push' && github.ref == format('refs/heads/{0}', matrix.environment.branch) ||
+      github.event_name == 'pull_request' && github.base_ref == 'main'
     
     steps:
       - name: Check out repository
