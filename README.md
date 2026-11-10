@@ -50,3 +50,17 @@ Finde einen Weg, wie die richtige Konfiguration zum richtigen Zeitpunkt verwende
 > Diese Aufgabe hat viele mögliche Lösungen. Alle haben ihre Vor- und Nachteile, sowie Kompromisse bzgl. Security.
 > Nutze dir bekannte Konzepte und/oder Ansätze aus der Vorlesung für eine Umsetzung.
 > Die Lösung muss nicht perfekt sein, sollte aber praktikabel und nachvollziehbar zu erklären sein.
+
+---
+
+## Umsetzung
+
+**Automatisierter Deployment-Prozess:**
+- **`.github/workflows/terraform.yml`**: Zwei separate Jobs (`terraform-dev`, `terraform-prod`) für Dev/Prod-Umgebungen mit automatischem Trigger auf Push/PR
+- **`.github/CODEOWNERS`**: Code Owner Review für `main` erzwungen
+- **Branch Protection (manuell)**: PR + 1 Approval von Code Owner für `main` aktiviert
+
+**Workflow-Trigger:**
+- Push zu `dev` → **Dev-Job** läuft
+- PR von `dev` → `main` → **Beide Jobs** laufen (Preview)
+- Merge zu `main` → **Prod-Job** läuft
